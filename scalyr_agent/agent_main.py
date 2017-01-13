@@ -35,6 +35,7 @@ __author__ = 'czerwin@scalyr.com'
 
 import errno
 import os
+import traceback
 import sys
 import time
 
@@ -252,6 +253,7 @@ class ScalyrAgent(object):
             if command == 'inner_run_with_checks':
                 raise e
             else:
+                traceback.print_exc()
                 raise Exception('Caught exception when attempt to execute command %s.  Exception was %s' %
                                 (command, str(e)))
 
