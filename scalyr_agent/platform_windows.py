@@ -53,6 +53,8 @@ import winerror
 import pywintypes
 # noinspection PyUnresolvedReferences
 import win32com.shell.shell
+# noinspection PyUnresolvedReferences
+import win32com.shell.shellcon
 
 try:
     import psutil
@@ -80,6 +82,8 @@ _SCALYR_AGENT_SERVICE_DISPLAY_NAME_ = "Scalyr Agent Service"
 _SERVICE_DESCRIPTION_ = "Collects logs and metrics and forwards them to Scalyr.com"
 # A custom control message that is used to signal the agent should generate a detailed status report.
 _SERVICE_CONTROL_DETAILED_REPORT_ = win32service.SERVICE_USER_DEFINED_CONTROL - 1
+_SCALYR_FOLDER = "Scalyr"
+_SCALYR_CONFIG_FILE = "ConfigPath"
 
 
 def _set_config_path_registry_entry(value):
@@ -91,11 +95,29 @@ def _set_config_path_registry_entry(value):
     @param value: The file path
     @type value: str
     """
-    _winreg.CreateKey(_winreg.HKEY_LOCAL_MACHINE, _REG_PATH)
-    registry_key = _winreg.OpenKey(_winreg.HKEY_LOCAL_MACHINE, _REG_PATH, 0,
-                                   _winreg.KEY_WRITE)
-    _winreg.SetValueEx(registry_key, _CONFIG_KEY, 0, _winreg.REG_SZ, value)
-    _winreg.CloseKey(registry_key)
+
+    # save to disk rather than to the registry
+    app_data = win32com.shell.shell.SHGetFolderPath( None, win32com.shell.shellcon.CSIDL_COMMON_APPDATA, None, 0 );
+
+    scalyr_folder = os.path.join( app_data, _SCALYR_FOLDER )
+    try:
+        os.mkdir( scalyr_folder )
+
+    except OSError, e:
+        if not e.errno == errno.EEXIST:
+            raise
+
+    config_file = None
+    try:
+        path = os.path.join( scalyr_folder, _SCALYR_CONFIG_FILE )
+        config_file = open( path, "w" )
+        config_file.write( value )
+    except Exception, e:
+        raise
+    finally:
+        if config_file:
+            config_file.close()
+
     return True
 
 
@@ -108,13 +130,42 @@ def _get_config_path_registry_entry(default_config_path):
     @return: The file path.
     @rtype: str
     """
+
+    result = None
+
+    # check to see if the config path exists on disk first
+    app_data = win32com.shell.shell.SHGetFolderPath( None, win32com.shell.shellcon.CSIDL_COMMON_APPDATA, None, 0 );
+    config_path = os.path.join( app_data, _SCALYR_FOLDER, _SCALYR_CONFIG_FILE )
+
+    config = None
+    try:
+        config = open( config_path, "r" )
+        result = config.readline().strip()
+    except Exception, e:
+        pass
+    finally:
+        if config:
+            config.close()
+
+    if result:
+        return result
+
+    # legacy - check to see if item exists in the registry
     try:
         registry_key = _winreg.OpenKey(_winreg.HKEY_LOCAL_MACHINE, _REG_PATH, 0, _winreg.KEY_READ)
-        value, regtype = _winreg.QueryValueEx(registry_key, _CONFIG_KEY)
+        result, regtype = _winreg.QueryValueEx(registry_key, _CONFIG_KEY)
         _winreg.CloseKey(registry_key)
-        return value
+
+        # now remove it, because we save to disk in the future
+        _winreg.DeleteKey( _winreg.HKEY_LOCAL_MACHINE, _REG_PATH )
+
     except EnvironmentError:
-        return default_config_path
+        pass
+
+    if not result:
+        result = default_config_path
+
+    return result
 
 
 # noinspection PyPep8Naming
