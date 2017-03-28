@@ -22,11 +22,14 @@ import datetime
 import os
 import threading
 import time
+import stat
 import sys
 
 import scalyr_agent.scalyr_logging as scalyr_logging
 import scalyr_agent.util as scalyr_util
 from scalyr_agent.log_watcher import LogWatcher
+
+import scalyr_agent.json_lib as json_lib
 
 from scalyr_agent.util import StoppableThread
 from scalyr_agent.log_processing import LogMatcher, LogFileProcessor
@@ -407,6 +410,7 @@ class CopyingManager(StoppableThread, LogWatcher):
 
                 # Do the initial scan for any log files that match the configured logs we should be copying.  If there
                 # are checkpoints for them, make sure we start copying from the position we left off at.
+                log.info( "sfnl: before main loop" )
                 self.__scan_for_new_logs_if_necessary(current_time=current_time,
                                                       checkpoints=checkpoints,
                                                       logs_initial_positions=self.__logs_initial_positions)
@@ -663,6 +667,11 @@ class CopyingManager(StoppableThread, LogWatcher):
             log.info('The log copying checkpoint file "%s" does not exist, skipping.' % file_path)
             return None
 
+        try:
+            st = os.stat( file_path )
+            log.info( "Checkpoint file inode is: %d", st[stat.ST_INO] )
+        except Exception, e:
+            log.info( "Error reading checkpoint file inode, %s", str( e ) )
         # noinspection PyBroadException
         try:
             return scalyr_util.read_file_as_json(file_path)
@@ -839,6 +848,7 @@ class CopyingManager(StoppableThread, LogWatcher):
                 if not log_path in checkpoints:
                     checkpoints[log_path] = LogFileProcessor.create_checkpoint(logs_initial_positions[log_path])
 
+        log.info( "checkpoints is: %s" % ( json_lib.serialize( checkpoints ) ) )
         for matcher in self.__log_matchers:
             for new_processor in matcher.find_matches(self.__log_paths_being_processed, checkpoints,
                                                       copy_at_index_zero=copy_at_index_zero):

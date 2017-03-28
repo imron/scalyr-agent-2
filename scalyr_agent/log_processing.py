@@ -2031,12 +2031,15 @@ class LogMatcher(object):
                 # Also check if we should skip over it entirely because it is too stale.
                 if not matched_file in existing_processors and self.__can_read_file_and_not_stale(matched_file,
                                                                                                   self.__last_check):
+                    log.info( "%s is not in existing_processors" % matched_file )
                     checkpoint_state = None
                     # Get the last checkpoint state if it exists.
                     if matched_file in previous_state:
+                        log.info( "checkpoint exists for %s" % matched_file )
                         checkpoint_state = previous_state[matched_file]
                         del previous_state[matched_file]
                     elif copy_at_index_zero or copy_from_start:
+                        log.info( "no checkpoint for %s, copy_from_start is %s" % ( matched_file, copy_from_start) )
                         # If we don't have a checkpoint and we are suppose to start copying the file at index zero,
                         # then create a checkpoint to represent that.
                         checkpoint_state = LogFileProcessor.create_checkpoint(0)
