@@ -481,16 +481,15 @@ class SyslogTCPServer( SocketServer.ThreadingMixIn, SocketServer.TCPServer ):
 class LogDeleter( object ):
     """Deletes unused log files that match a log_file_template"""
 
-    def __init__( self, check_interval_mins, delete_interval_hours, check_rotated_timestamps, max_log_rotations, log_path, log_file_template ):
+    def __init__( self, check_interval_mins, delete_interval_hours, check_rotated_timestamps, log_path, log_file_template ):
         self._check_interval = check_interval_mins * 60
         self._delete_interval = delete_interval_hours * 60 * 60
         self._check_rotated_timestamps = check_rotated_timestamps
-        self._max_log_rotations = max_log_rotations
         self._log_glob = os.path.join( log_path, log_file_template.safe_substitute( CID='*', CNAME='*' ) )
 
         self._last_check = time.time()
 
-    def _get_old_logs_for_glob( self, current_time, glob_pattern, existing_logs, check_rotated, max_rotations ):
+    def _get_old_logs_for_glob( self, current_time, glob_pattern, existing_logs, check_rotated ):
 
         result = []
 
@@ -502,12 +501,9 @@ class LogDeleter( object ):
                     result.append( matching_file )
                     added = True
 
-                for i in range( max_rotations, 0, -1 ):
-                    rotated_file = matching_file + ('.%d' % i)
+                rotation_glob = matching_file + ".*"
+                for rotated_file in glob.glob( rotation_glob ):
                     try:
-                        if not os.path.isfile( rotated_file ):
-                            continue
-
                         if check_rotated:
                             mtime = os.path.getmtime(rotated_file)
                             if current_time - mtime > self._delete_interval:
@@ -534,7 +530,7 @@ class LogDeleter( object ):
         current_time = time.time()
         if current_time - self._last_check > self._check_interval:
 
-            old_logs = self._get_old_logs_for_glob( current_time, self._log_glob, existing_logs, self._check_rotated_timestamps, self._max_log_rotations )
+            old_logs = self._get_old_logs_for_glob( current_time, self._log_glob, existing_logs, self._check_rotated_timestamps )
             self._last_check = current_time
 
         for filename in old_logs:
@@ -582,7 +578,6 @@ class SyslogHandler(object):
             self.__docker_log_deleter = LogDeleter( config.get( 'docker_check_for_unused_logs_mins' ),
                                                     config.get( 'docker_delete_unused_logs_hours' ),
                                                     config.get( 'docker_check_rotated_timestamps' ),
-                                                    rotation_count,
                                                     log_path,
                                                     self.__docker_file_template )
 
