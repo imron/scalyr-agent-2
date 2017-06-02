@@ -486,6 +486,7 @@ class LogDeleter( object ):
         self._delete_interval = delete_interval_hours * 60 * 60
         self._check_rotated_timestamps = check_rotated_timestamps
         self._log_glob = os.path.join( log_path, log_file_template.safe_substitute( CID='*', CNAME='*' ) )
+        self._rotate_re = re.compile( "\\.\\d+$" )
 
         self._last_check = time.time()
 
@@ -504,14 +505,17 @@ class LogDeleter( object ):
                 rotation_glob = matching_file + ".*"
                 for rotated_file in glob.glob( rotation_glob ):
                     try:
+                        append = False
                         if check_rotated:
                             mtime = os.path.getmtime(rotated_file)
                             if current_time - mtime > self._delete_interval:
-                                result.append( rotated_file )
+                                append = True
                         else:
                             if added:
-                                result.append( rotated_file )
+                                append = True
 
+                        if append and self._rotate_re.search( rotated_file ):
+                            result.append( rotated_file )
                     except OSError, e:
                         global_log.warn( "Unable to read modification time for file '%s', %s" % (rotated_file, str(e)),
                                           limit_once_per_x_secs=300,
