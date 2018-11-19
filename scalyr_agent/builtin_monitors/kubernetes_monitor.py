@@ -563,7 +563,7 @@ class ContainerChecker( StoppableThread ):
     def start( self ):
 
         try:
-            self.__k8s_filter = self._build_k8s_filter()
+            self.__k8s_filter = self.__k8s.build_filter_for_current_node()
 
             self._logger.log( scalyr_logging.DEBUG_LEVEL_1, "k8s filter for pod '%s' is '%s'" % (self.__k8s.get_pod_name(), self.__k8s_filter) )
 
@@ -608,26 +608,6 @@ class ContainerChecker( StoppableThread ):
             self._logger.log(scalyr_logging.DEBUG_LEVEL_1, "Stopping %s" % (path) )
 
         self.raw_logs = []
-
-    #@property
-    #def cluster_name( self ):
-    #    return self.__k8s.get_cluster_name()
-
-    def _build_k8s_filter( self ):
-        """Builds a fieldSelector filter to be used when querying pods the k8s api"""
-        result = None
-        try:
-            pod_name = self.__k8s.get_pod_name()
-            node_name = self.__k8s.get_node_name( pod_name )
-
-            if node_name:
-                result = 'spec.nodeName=%s' % node_name
-            else:
-                self._logger.warning( "Unable to get node name for pod '%s'.  This will have negative performance implications for clusters with a large number of pods.  Please consider setting the environment variable SCALYR_K8S_NODE_NAME to valueFrom:fieldRef:fieldPath:spec.nodeName in your yaml file" )
-        except Exception, e:
-            global_log.warn( "Failed to build k8s filter %s\n%s" % (str(e), traceback.format_exc() ))
-
-        return result
 
     def get_k8s_data( self ):
         """ Convenience wrapper to query and process all pods
